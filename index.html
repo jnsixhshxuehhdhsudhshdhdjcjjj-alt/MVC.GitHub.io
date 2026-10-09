@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1040">
+<title>Медийный волейбол</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #1a1040; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none; overscroll-behavior: none;
+    position: fixed;
+  }
+  #app {
+    position: relative; width: 100%; height: 100%;
+    max-width: 1200px; margin: 0 auto; overflow: hidden;
+  }
+  #game {
+    position: absolute; top: 0; left: 0;
+    display: block; background: #1a1040;
+    touch-action: none;
+  }
+  #joystick {
+    position: absolute;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    left: 20px; width: 130px; height: 130px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    border: 2px solid rgba(255,255,255,0.15);
+    box-shadow: inset 0 4px 20px rgba(0,0,0,0.3);
+    touch-action: none; z-index: 5;
+    opacity: 0.75; pointer-events: auto;
+  }
+  #joystick.hidden { opacity: 0; pointer-events: none; }
+  #joystick::before, #joystick::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    border: 1px dashed rgba(255,255,255,0.12); pointer-events: none;
+  }
+  #joystick::before { width: 76px; height: 76px; }
+  #joystick::after { width: 28px; height: 28px; }
+  #knob {
+    position: absolute; left: 50%; top: 50%;
+    width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #fff8e8, #ffb877 60%, #e0774a);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.5);
+    pointer-events: none;
+  }
+  #btn-jump {
+    position: absolute;
+    bottom: calc(30px + env(safe-area-inset-bottom));
+    right: 26px;
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #ffe8d8, #ff9877 55%, #d0664a 100%);
+    border: 2px solid rgba(255,255,255,0.35);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4), inset 0 2px 6px rgba(255,255,255,0.5);
+    color: #fff;
+    font-size: 40px;
+    font-weight: 900;
+    font-family: inherit;
+    cursor: pointer;
+    touch-action: none;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.88;
+    transition: opacity 0.2s, transform 0.05s;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.35);
+  }
+  #btn-jump.hidden { opacity: 0; pointer-events: none; }
+  #btn-jump:active, #btn-jump.pressed {
+    transform: scale(0.93);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.55), inset 0 3px 10px rgba(255,255,255,0.4);
+  }
+  .overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #1a1040 0%, #2a1a4a 50%, #3a2050 100%);
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 24px 16px;
+    z-index: 10; gap: 14px; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .overlay.hidden { display: none; }
+  .title {
+    font-size: clamp(24px, 6vw, 42px); font-weight: 900;
+    letter-spacing: 2px; text-align: center;
+    background: linear-gradient(90deg, #ffb347, #ff5a8c, #c05aff);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    line-height: 1.1;
+  }
+  .subtitle { color: #b8a8e0; font-size: 13px; text-align: center; line-height: 1.5; max-width: 320px; }
+  .btn-primary {
+    padding: 15px 40px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #ff7a4a, #ff3ea5);
+    color: #fff; font-size: 16px; font-weight: 800;
+    letter-spacing: 1px; cursor: pointer;
+    font-family: inherit; min-width: 210px;
+    box-shadow: 0 8px 24px rgba(255, 80, 140, 0.35);
+    touch-action: manipulation;
+  }
+  .btn-primary:active { transform: scale(0.96); }
+  .btn-secondary {
+    padding: 12px 30px; border-radius: 14px;
+    border: 2px solid rgba(180, 160, 255, 0.35);
+    background: rgba(255, 255, 255, 0.05);
+    color: #d8ccff; font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit; min-width: 210px;
+    touch-action: manipulation;
+  }
+  .btn-secondary:active { background: rgba(255,255,255,0.12); transform: scale(0.96); }
+  .chars-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; max-width: 100%; padding: 4px; }
+  .char-card {
+    width: 104px; padding: 8px 5px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    border: 2px solid rgba(180, 160, 255, 0.2);
+    border-radius: 14px; text-align: center;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .char-card.selected {
+    border-color: #ffb347;
+    background: linear-gradient(180deg, rgba(255,180,80,0.18), rgba(255,100,160,0.10));
+    box-shadow: 0 0 24px rgba(255, 140, 60, 0.4);
+    transform: translateY(-3px);
+  }
+  .char-card canvas { display: block; margin: 0 auto 3px; }
+  .char-card .name { font-size: 12px; font-weight: 800; color: #fff; margin-bottom: 3px; }
+  .char-card .stats { font-size: 9px; color: #b8a8e0; line-height: 1.3; }
+  .char-card .stats b { color: #ffd080; font-weight: 700; }
+  .back-btn {
+    position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 14px;
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 2px solid rgba(180, 160, 255, 0.3);
+    background: rgba(255,255,255,0.05); color: #d8ccff;
+    font-size: 18px; cursor: pointer; font-family: inherit;
+    touch-action: manipulation;
+  }
+  .result-title { font-size: clamp(26px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; text-align: center; }
+  .result-title.win {
+    background: linear-gradient(90deg, #ffd080, #4afcb0);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .result-title.lose {
+    background: linear-gradient(90deg, #ff5a8c, #a030d0);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .result-score { font-size: 20px; color: #d8ccff; font-weight: 700; letter-spacing: 4px; }
+  .result-char {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 18px; background: rgba(255,255,255,0.06); border-radius: 12px;
+  }
+  .result-char .info { text-align: left; }
+  .result-char .info .n { font-weight: 800; font-size: 15px; }
+  .result-char .info .r { font-size: 11px; color: #b8a8e0; }
+  /* Авторская подпись — только внутри главного меню */
+  #menu .credits {
+    position: absolute;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    width: 100%;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 13px;
+    line-height: 1.6;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+    user-select: none;
+  }
+  #menu .credits-handle {
+    display: inline-block;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.62);
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-user-select: text;
+    user-select: text;
+    text-decoration: underline;
+    text-decoration-color: rgba(255,255,255,0.25);
+    text-underline-offset: 3px;
+  }
+  #menu .credits-handle:active {
+    color: rgba(255, 255, 255, 0.95);
+  }
+  #menu .copy-status {
+    min-height: 16px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0;
+  }
+
+  /* ===== ОБНОВЛЁННЫЙ ДИЗАЙН ===== */
+  :root { color-scheme: dark; }
+  html, body { background: #090d22; }
+  #app { background: #090d22; isolation: isolate; }
+  #game { background: radial-gradient(ellipse at 50% 20%, #242c61 0%, #111735 62%, #090d22 100%); }
+  .overlay {
+    background:
+      radial-gradient(ellipse at 50% 12%, rgba(91, 107, 255, .22), transparent 48%),
+      radial-gradient(ellipse at 0% 100%, rgba(255, 72, 154, .13), transparent 45%),
+      linear-gradient(155deg, rgba(8, 13, 34, .97), rgba(17, 20, 52, .97) 55%, rgba(31, 18, 57, .97));
+    padding: max(24px, env(safe-area-inset-top)) 18px max(28px, env(safe-area-inset-bottom));
+    gap: 13px;
+  }
+  .overlay::before {
+    content: ''; position: absolute; width: min(76vw, 360px); aspect-ratio: 1;
+    top: 8%; left: 50%; transform: translateX(-50%); border-radius: 50%;
+    background: radial-gradient(circle, rgba(105, 95, 255, .16), rgba(105, 95, 255, 0) 70%);
+    pointer-events: none;
+  }
+  .overlay > * { position: relative; }
+  .overlay > .back-btn { position: absolute; }
+  .title {
+    font-size: clamp(30px, 8vw, 54px); letter-spacing: clamp(1px, .6vw, 4px);
+    line-height: 1.02; filter: drop-shadow(0 8px 24px rgba(255, 75, 160, .16));
+  }
+  .subtitle { color: #b9c4ef; font-size: 14px; line-height: 1.65; max-width: 340px; }
+  .btn-primary, .btn-secondary {
+    min-height: 52px; border-radius: 16px; transition: transform .16s ease, filter .16s ease, box-shadow .16s ease;
+  }
+  .btn-primary {
+    position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.25);
+    background: linear-gradient(110deg, #ff784f 0%, #ff438d 52%, #a65bff 100%);
+    box-shadow: 0 10px 30px rgba(255, 65, 143, .23), inset 0 1px 0 rgba(255,255,255,.35);
+    letter-spacing: 1.3px;
+  }
+  .btn-primary:active { transform: translateY(1px) scale(.975); filter: brightness(1.1); }
+  .btn-secondary {
+    border: 1px solid rgba(158, 174, 255, .28); background: rgba(255,255,255,.055);
+    color: #e1e7ff; box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .btn-secondary:active { transform: scale(.975); background: rgba(255,255,255,.12); }
+  .char-card {
+    background: linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+    border: 1px solid rgba(171, 184, 255, .2); border-radius: 18px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.16); backdrop-filter: blur(10px);
+    transition: transform .16s ease, border-color .16s ease, background .16s ease;
+  }
+  .char-card.selected {
+    border: 1px solid #ffc078;
+    background: linear-gradient(160deg, rgba(255,184,100,.2), rgba(255,74,145,.11));
+    box-shadow: 0 0 0 2px rgba(255,184,100,.12), 0 10px 28px rgba(255,104,123,.14);
+  }
+  .char-card .stats { color: #c0c9ed; }
+  #menu .credits { color: rgba(218,225,255,.53); font-size: 12px; letter-spacing: .7px; }
+  #menu .credits-handle { color: rgba(226,231,255,.78); }
+  #menu .credits-handle:focus-visible, button:focus-visible { outline: 2px solid #ffd080; outline-offset: 3px; }
+  #joystick {
+    width: 116px; height: 116px; left: max(16px, env(safe-area-inset-left));
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    border: 1px solid rgba(220,230,255,.26);
+    background: radial-gradient(circle at 50% 45%, rgba(138,157,255,.19), rgba(255,255,255,.035));
+    box-shadow: 0 8px 30px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.12);
+    opacity: .9; backdrop-filter: blur(8px);
+  }
+  #joystick::before { width: 72px; height: 72px; border-color: rgba(220,230,255,.18); }
+  #joystick::after { width: 28px; height: 28px; border-color: rgba(220,230,255,.18); }
+  #knob {
+    width: 52px; height: 52px; margin: -26px 0 0 -26px;
+    background: radial-gradient(circle at 32% 25%, #ffffff, #a8b7ff 48%, #6375e9 100%);
+    box-shadow: 0 5px 18px rgba(30,40,110,.5), inset 0 1px 4px rgba(255,255,255,.8);
+  }
+  #btn-jump {
+    width: 100px; height: 100px; right: max(18px, env(safe-area-inset-right));
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    border: 1px solid rgba(255,255,255,.42);
+    background: radial-gradient(circle at 32% 25%, #fff2e9, #ff956e 46%, #ff477e 100%);
+    box-shadow: 0 8px 28px rgba(255,75,115,.27), inset 0 2px 5px rgba(255,255,255,.55);
+    font-size: 36px;
+  }
+  .back-btn { background: rgba(255,255,255,.08); border-color: rgba(190,200,255,.3); }
+  .result-char { border: 1px solid rgba(190,200,255,.13); background: rgba(255,255,255,.055); border-radius: 16px; }
+  @media (max-height: 620px) {
+    .overlay { gap: 8px; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+    .title { font-size: clamp(25px, 6vh, 38px); }
+    .subtitle { font-size: 12px; }
+    #menu canvas { width: 62px !important; height: 74px !important; }
+    .btn-primary { min-height: 44px; padding: 11px 30px; }
+    .btn-secondary { min-height: 42px; padding: 9px 22px; }
+    #menu .credits { font-size: 10px; bottom: calc(4px + env(safe-area-inset-bottom)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+  <div id="joystick" class="hidden"><div id="knob"></div></div>
+  <button id="btn-jump" class="hidden">⬆</button>
+
+  <div class="overlay" id="menu">
+    <div class="title">МЕДИЙНЫЙ<br>ВОЛЕЙБОЛ</div>
+    <p class="subtitle">Отбей вирусный пост через сетку.<br>Максимум 3 касания. Блок не считается!</p>
+    <button class="btn-primary" id="btn-play">▶ ИГРАТЬ</button>
+    <button class="btn-secondary" id="btn-choose">ВЫБРАТЬ ПЕРСОНАЖА</button>
+    <div class="credits">
+      <div>Создал Гогенчик</div>
+      <button type="button" class="credits-handle" id="copy-handle" aria-label="Скопировать ник @VzletZaGolovoi">@VzletZaGolovoi</button>
+      <div class="copy-status" id="copy-status" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="charselect">
+    <button class="back-btn" id="btn-char-back">←</button>
+    <div class="title" style="font-size: clamp(18px,4vw,26px)">ВЫБЕРИ ПЕРСОНАЖА</div>
+    <div class="chars-row" id="chars-row"></div>
+    <button class="btn-primary" id="btn-char-done">ГОТОВО</button>
+  </div>
+
+  <div class="overlay hidden" id="gameover">
+    <div class="result-title" id="go-title">ПОБЕДА!</div>
+    <div class="result-score" id="go-score">5 : 3</div>
+    <div class="result-char">
+      <canvas id="go-char-canvas" width="50" height="60"></canvas>
+      <div class="info">
+        <div class="n" id="go-char-name">Гогенчик</div>
+        <div class="r" id="go-char-role">Сбалансированный</div>
+      </div>
+    </div>
+    <button class="btn-primary" id="btn-again">ИГРАТЬ СНОВА</button>
+    <button class="btn-secondary" id="btn-change">СМЕНИТЬ ПЕРСОНАЖА</button>
+    <button class="btn-secondary" id="btn-menu">В ГЛАВНОЕ МЕНЮ</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ==================== МИР ====================
+let W = 800, H = 500;
+let GROUND_Y = 420, NET_X = 400, NET_TOP = 270;
+const NET_HALF = 5;
+
+// ==================== ФИЗИКА ====================
+const GRAVITY = 0.38;
+const BALL_R = 20; // Немного увеличенный мяч: проще попадать, физика использует этот же радиус
+const WIN_SCORE = 5;
+const MAX_SPEED = 13.2;
+const SERVE_DELAY = 75;
+const TOSS_VY = -8;
+const TOSS_VX = 3.2;
+const MIN_HIT_UP = -5.8;
+const MAX_TOUCHES = 3;   // максимум касаний на одной стороне
+
+// ==================== ПЕРСОНАЖИ ====================
+const CHARACTERS = {
+  goghenchik: {
+    key: 'goghenchik', name: 'Гогенчик', role: 'Сбалансированный',
+    speed: 6.5, jump: -13, hitPower: 1.1,
+    skin: '#f0c390', hair: '#5a3018', hairStyle: 'beret',
+    jersey: '#ff9a3c', jerseyAccent: '#d0661a',
+    shorts: '#2a1e3a', shoe: '#ffffff', number: '7', glow: '#ffb347'
+  },
+  setter: {
+    key: 'setter', name: 'Setter', role: 'Быстрый и прыгучий',
+    speed: 8, jump: -15, hitPower: 1.0,
+    skin: '#e8b088', hair: '#101020', hairStyle: 'mohawk',
+    jersey: '#00c8ff', jerseyAccent: '#0070c8',
+    shorts: '#0a2030', shoe: '#f0f8ff', number: '1', glow: '#00e5ff'
+  },
+  shelepa: {
+    key: 'shelepa', name: 'Шелепа', role: 'Мощный удар',
+    speed: 5.5, jump: -11.5, hitPower: 1.35,
+    skin: '#d8a080', hair: '#4a1a0a', hairStyle: 'spiky',
+    jersey: '#ff3ea5', jerseyAccent: '#a0006a',
+    shorts: '#3a0a20', shoe: '#ffd0e0', number: '9', glow: '#ff3ea5'
+  }
+};
+const AI_CHAR = {
+  key: 'ai', name: 'Хейтер', role: 'Вечно недовольный',
+  speed: 5.3, jump: -13, hitPower: 1.05,
+  skin: '#c8c0e0', hair: '#3a1a6a', hairStyle: 'antenna',
+  jersey: '#8a3eff', jerseyAccent: '#5a1fbf',
+  shorts: '#1a0a3a', shoe: '#d0c0ff', number: 'AI', glow: '#a060ff'
+};
+
+// ==================== СОСТОЯНИЕ ====================
+let state = 'menu';
+let selectedChar = 'goghenchik';
+let score = { p: 0, a: 0 };
+let touches = { p: 0, a: 0 };
+let lastBallSide = 0;      // -1 = слева от сетки, 1 = справа
+let screenTime = 0;
+let serveDelay = 0;
+let skyDecor = [];
+
+// Сообщения
+let messageText = '';
+let messageTimer = 0;
+let messageColor = '#fff';
+
+const player = {
+  x: 150, y: 420, vx: 0, vy: 0, w: 44, h: 74,
+  onGround: true, stats: CHARACTERS.goghenchik,
+  hitCooldown: 0, walkPhase: 0, jumping: false
+};
+const ai = {
+  x: 650, y: 420, vx: 0, vy: 0, w: 40, h: 72,
+  onGround: true, stats: AI_CHAR,
+  hitCooldown: 0, walkPhase: 0, jumping: false
+};
+const ball = {
+  x: 400, y: 150, vx: 0, vy: 0, r: BALL_R, spin: 0,
+  trail: [], serveDir: 1
+};
+const particles = [];
+const rings = [];
+
+// ==================== CANVAS / RESIZE ====================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const appEl = document.getElementById('app');
+
+let lastResize = { w: 0, h: 0 };
+
+function resizeCanvas() {
+  try {
+    const rect = appEl.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return;
+    if (Math.abs(rect.width - lastResize.w) < 1 && Math.abs(rect.height - lastResize.h) < 1) return;
+    lastResize.w = rect.width; lastResize.h = rect.height;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const aspect = rect.width / rect.height;
+
+    if (aspect >= 1) {
+      H = 500; W = H * aspect;
+      if (W < 800) { W = 800; H = W / aspect; }
+    } else {
+      W = 800; H = W / aspect;
+      if (H < 500) { H = 500; W = H * aspect; }
+    }
+    W = Math.round(W); H = Math.round(H);
+
+    GROUND_Y = aspect >= 1 ? H * 0.82 : H * 0.58;
+    NET_X = W / 2;
+    NET_TOP = GROUND_Y - 150;
+
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(dpr * rect.width / W, 0, 0, dpr * rect.height / H, 0, 0);
+
+    buildSky();
+    clampEntities();
+  } catch (err) { console.error('resizeCanvas error:', err); }
+}
+
+function buildSky() {
+  skyDecor = [];
+  const starCount = Math.min(90, Math.max(15, Math.floor(W * GROUND_Y / 12000)));
+  for (let i = 0; i < starCount; i++) {
+    skyDecor.push({
+      x: Math.random() * W, y: Math.random() * GROUND_Y * 0.6,
+      r: Math.random() * 1.4 + 0.3,
+      tw: Math.random() * Math.PI * 2,
+      speed: 1 + Math.random() * 2
+    });
+  }
+}
+
+function clampEntities() {
+  player.y = Math.min(GROUND_Y, player.y);
+  player.x = Math.max(player.w/2 + 4, Math.min(NET_X - player.w/2 - 4, player.x));
+  ai.y = Math.min(GROUND_Y, ai.y);
+  ai.x = Math.max(NET_X + ai.w/2 + 4, Math.min(W - ai.w/2 - 4, ai.x));
+  ball.x = Math.max(ball.r, Math.min(W - ball.r, ball.x));
+  ball.y = Math.max(ball.r, Math.min(GROUND_Y - ball.r, ball.y));
+}
+
+// ==================== СТИК ====================
+const joyEl = document.getElementById('joystick');
+const knobEl = document.getElementById('knob');
+const joy = { active: false, touchId: null, baseX: 0, baseY: 0, maxDist: 42, deadzone: 10 };
+
+function joyStart(cx, cy, id) {
+  const r = joyEl.getBoundingClientRect();
+  joy.active = true; joy.touchId = id;
+  joy.baseX = r.left + r.width / 2;
+  joy.baseY = r.top + r.height / 2;
+  joyMove(cx, cy);
+}
+function joyMove(cx, cy) {
+  if (!joy.active) return;
+  let dx = cx - joy.baseX, dy = cy - joy.baseY;
+  const d = Math.hypot(dx, dy);
+  if (d > joy.maxDist) { dx = dx / d * joy.maxDist; dy = dy / d * joy.maxDist; }
+  knobEl.style.transform = `translate(${dx}px, ${dy}px)`;
+  setInput('left', dx < -joy.deadzone);
+  setInput('right', dx > joy.deadzone);
+  // Прыжок больше НЕ на стике — отдельная кнопка
+}
+function joyEnd() {
+  joy.active = false; joy.touchId = null;
+  knobEl.style.transform = '';
+  setInput('left', false); setInput('right', false);
+}
+joyEl.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  joyStart(t.clientX, t.clientY, t.identifier);
+}, { passive: false });
+joyEl.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.touchId) { joyMove(t.clientX, t.clientY); break; }
+  }
+}, { passive: false });
+joyEl.addEventListener('touchend', (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joy.touchId) { joyEnd(); break; }
+  }
+});
+joyEl.addEventListener('touchcancel', joyEnd);
+joyEl.addEventListener('mousedown', (e) => { e.preventDefault(); joyStart(e.clientX, e.clientY, 'mouse'); });
+window.addEventListener('mousemove', (e) => { if (joy.active && joy.touchId === 'mouse') joyMove(e.clientX, e.clientY); });
+window.addEventListener('mouseup', () => { if (joy.touchId === 'mouse') joyEnd(); });
+
+// ==================== КНОПКА ПРЫЖКА ====================
+const jumpBtn = document.getElementById('btn-jump');
+
+function pressJump() { setInput('jump', true); jumpBtn.classList.add('pressed'); }
+function releaseJump() { setInput('jump', false); jumpBtn.classList.remove('pressed'); }
+
+jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressJump(); }, { passive: false });
+jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); releaseJump(); }, { passive: false });
+jumpBtn.addEventListener('touchcancel', () => releaseJump());
+jumpBtn.addEventListener('mousedown', (e) => { e.preventDefault(); pressJump(); });
+window.addEventListener('mouseup', () => releaseJump());
+
+// ==================== ВВОД ====================
+const input = { left: false, right: false, jump: false };
+function setInput(k, v) { input[k] = v; }
+const keyMap = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump', ArrowUp: 'jump', KeyW: 'jump' };
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const k = keyMap[e.code];
+  if (k) { e.preventDefault(); setInput(k, true); }
+});
+window.addEventListener('keyup', (e) => {
+  const k = keyMap[e.code];
+  if (k) { e.preventDefault(); setInput(k, false); }
+});
+document.addEventListener('touchmove', (e) => {
+  if (e.target && e.target.closest && e.target.closest('.overlay')) return;
+  if (e.cancelable) e.preventDefault();
+}, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// Копирование ника из подписи главного меню
+const copyHandleButton = document.getElementById('copy-handle');
+const copyStatus = document.getElementById('copy-status');
+
+async function copyCreatorHandle() {
+  const handle = '@VzletZaGolovoi';
+  let copied = false;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(handle);
+      copied = true;
+    } else {
+      // Резервный способ для браузеров без Clipboard API.
+      const temporaryInput = document.createElement('textarea');
+      temporaryInput.value = handle;
+      temporaryInput.setAttribute('readonly', '');
+      temporaryInput.style.position = 'fixed';
+      temporaryInput.style.left = '-9999px';
+      temporaryInput.style.top = '0';
+      temporaryInput.style.opacity = '0';
+      temporaryInput.style.userSelect = 'text';
+      document.body.appendChild(temporaryInput);
+      temporaryInput.focus();
+      temporaryInput.select();
+      temporaryInput.setSelectionRange(0, temporaryInput.value.length);
+      copied = document.execCommand('copy');
+      temporaryInput.remove();
+    }
+  } catch (error) {
+    copied = false;
+  }
+
+  copyStatus.textContent = copied ? 'Скопировано!' : 'Не удалось скопировать — нажми и удерживай ник.';
+  clearTimeout(copyCreatorHandle.statusTimer);
+  copyCreatorHandle.statusTimer = setTimeout(() => {
+    copyStatus.textContent = '';
+  }, 2200);
+}
+
+copyHandleButton.addEventListener('click', copyCreatorHandle);
+
+// ==================== UI ====================
+const menuEl = document.getElementById('menu');
+const charEl = document.getElementById('charselect');
+const goEl = document.getElementById('gameover');
+
+document.getElementById('btn-play').addEventListener('click', startGame);
+document.getElementById('btn-choose').addEventListener('click', () => {
+  menuEl.classList.add('hidden'); charEl.classList.remove('hidden');
+});
+document.getElementById('btn-char-back').addEventListener('click', () => {
+  charEl.classList.add('hidden'); menuEl.classList.remove('hidden');
+});
+document.getElementById('btn-char-done').addEventListener('click', () => {
+  charEl.classList.add('hidden'); menuEl.classList.remove('hidden');
+  updateMenuCharPreview();
+});
+document.getElementById('btn-again').addEventListener('click', () => {
+  goEl.classList.add('hidden'); startGame();
+});
+document.getElementById('btn-change').addEventListener('click', () => {
+  goEl.classList.add('hidden'); charEl.classList.remove('hidden');
+});
+document.getElementById('btn-menu').addEventListener('click', () => {
+  goEl.classList.add('hidden'); menuEl.classList.remove('hidden');
+  state = 'menu'; joyEl.classList.add('hidden'); jumpBtn.classList.add('hidden');
+});
+
+// ==================== ПЕРСОНАЖ ====================
+function drawSprite(g, cx, gy, s, facing, phase, jumping) {
+  g.save();
+  g.translate(cx, gy);
+  g.scale(facing, 1);
+  const swing = jumping ? 0 : Math.sin(phase) * 3;
+  const armUp = jumping;
+
+  g.fillStyle = s.skin;
+  g.beginPath(); g.moveTo(-9 + swing, -22); g.lineTo(-3 + swing, -22); g.lineTo(-2 + swing, -6); g.lineTo(-9 + swing, -6); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(2 - swing, -22); g.lineTo(9 - swing, -22); g.lineTo(9 - swing, -6); g.lineTo(2 - swing, -6); g.closePath(); g.fill();
+
+  g.fillStyle = s.shoe;
+  g.beginPath(); g.moveTo(-13 + swing, -6); g.lineTo(-1 + swing, -6); g.lineTo(-1 + swing, -1); g.lineTo(-14 + swing, -1); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(1 - swing, -6); g.lineTo(13 - swing, -6); g.lineTo(14 - swing, -1); g.lineTo(1 - swing, -1); g.closePath(); g.fill();
+  g.fillStyle = s.jerseyAccent;
+  g.fillRect(-13 + swing, -5, 12, 2);
+  g.fillRect(1 - swing, -5, 12, 2);
+
+  g.fillStyle = s.shorts;
+  g.beginPath(); g.moveTo(-13, -36); g.lineTo(13, -36); g.lineTo(11, -20); g.lineTo(-11, -20); g.closePath(); g.fill();
+  g.fillStyle = s.jerseyAccent;
+  g.fillRect(-12, -36, 24, 3);
+
+  g.fillStyle = s.jersey;
+  g.beginPath(); g.moveTo(-12, -54); g.lineTo(12, -54); g.lineTo(14, -34); g.lineTo(-14, -34); g.closePath(); g.fill();
+  g.fillStyle = s.jerseyAccent;
+  g.beginPath(); g.moveTo(-12, -54); g.lineTo(12, -54); g.lineTo(8, -50); g.lineTo(-8, -50); g.closePath(); g.fill();
+
+  g.fillStyle = s.skin;
+  if (armUp) {
+    g.beginPath(); g.moveTo(-13, -52); g.lineTo(-9, -52); g.lineTo(-11, -64); g.lineTo(-16, -64); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(9, -52); g.lineTo(13, -52); g.lineTo(16, -64); g.lineTo(11, -64); g.closePath(); g.fill();
+  } else {
+    g.beginPath(); g.moveTo(-14, -52); g.lineTo(-10, -52); g.lineTo(-13, -36); g.lineTo(-17, -36); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(10, -52); g.lineTo(14, -52); g.lineTo(17, -36); g.lineTo(13, -36); g.closePath(); g.fill();
+  }
+
+  g.fillStyle = s.skin;
+  g.beginPath(); g.arc(0, -62, 9.5, 0, Math.PI * 2); g.fill();
+
+  g.fillStyle = s.hair;
+  if (s.hairStyle === 'beret') {
+    g.beginPath(); g.ellipse(-1, -69, 12, 4.5, 0, 0, Math.PI * 2); g.fill();
+    g.fillRect(-3, -72, 2, 4);
+  } else if (s.hairStyle === 'mohawk') {
+    g.beginPath(); g.moveTo(-1, -76); g.lineTo(-5, -68); g.lineTo(-2, -68); g.lineTo(-3, -62); g.lineTo(2, -68); g.lineTo(-1, -68); g.closePath(); g.fill();
+    g.beginPath(); g.arc(0, -64, 10, Math.PI * 1.05, Math.PI * 1.55); g.lineTo(-8, -60); g.fill();
+  } else if (s.hairStyle === 'spiky') {
+    for (let i = -1; i <= 1; i++) {
+      g.beginPath(); g.moveTo(i * 5 - 3, -68); g.lineTo(i * 5, -75); g.lineTo(i * 5 + 3, -68); g.closePath(); g.fill();
+    }
+    g.beginPath(); g.arc(0, -64, 10, Math.PI * 0.95, Math.PI * 1.65); g.lineTo(8, -60); g.fill();
+  } else if (s.hairStyle === 'antenna') {
+    g.strokeStyle = s.jersey; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(0, -70); g.lineTo(0, -78); g.stroke();
+    g.fillStyle = s.jersey;
+    g.beginPath(); g.arc(0, -80, 2.5, 0, Math.PI * 2); g.fill();
+  }
+
+  g.scale(facing, 1);
+  g.fillStyle = '#1a1025';
+  g.beginPath(); g.arc(2.5, -63, 1.6, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(-4, -63, 1.6, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(3, -63.4, 0.6, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(-3.5, -63.4, 0.6, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#1a1025'; g.lineWidth = 1.2;
+  g.beginPath(); g.arc(0, -58.5, 3.5, 0.15, Math.PI - 0.15); g.stroke();
+
+  g.fillStyle = '#fff';
+  g.font = 'bold 12px -apple-system, system-ui, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(s.number, 0, -44);
+
+  g.restore();
+}
+
+// ==================== КАРТОЧКИ ====================
+function renderCharCards() {
+  const row = document.getElementById('chars-row');
+  row.innerHTML = '';
+  for (const key of Object.keys(CHARACTERS)) {
+    const s = CHARACTERS[key];
+    const card = document.createElement('div');
+    card.className = 'char-card' + (key === selectedChar ? ' selected' : '');
+    card.dataset.char = key;
+
+    const cv = document.createElement('canvas');
+    const pdpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = 76 * pdpr; cv.height = 90 * pdpr;
+    cv.style.width = '76px'; cv.style.height = '90px';
+    card.appendChild(cv);
+
+    const name = document.createElement('div');
+    name.className = 'name'; name.textContent = s.name;
+    card.appendChild(name);
+
+    const stats = document.createElement('div');
+    stats.className = 'stats';
+    stats.innerHTML = `Скор: <b>${'★'.repeat(Math.round(s.speed - 3))}</b><br>Прыж: <b>${'★'.repeat(Math.round(-s.jump - 9))}</b><br>Удар: <b>${'★'.repeat(Math.round(s.hitPower * 3))}</b>`;
+    card.appendChild(stats);
+
+    const pctx = cv.getContext('2d');
+    pctx.setTransform(pdpr, 0, 0, pdpr, 0, 0);
+    drawSprite(pctx, 38, 88, s, 1, 0, false);
+
+    card.addEventListener('click', () => {
+      selectedChar = key;
+      document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    });
+    row.appendChild(card);
+  }
+}
+
+let menuPreviewCanvas = null;
+function updateMenuCharPreview() {
+  const sub = document.querySelector('#menu .subtitle');
+  if (!sub) return;
+  if (!menuPreviewCanvas) {
+    menuPreviewCanvas = document.createElement('canvas');
+    menuPreviewCanvas.style.display = 'block';
+    menuPreviewCanvas.style.margin = '0 auto';
+    sub.parentNode.insertBefore(menuPreviewCanvas, sub);
+  }
+  const s = CHARACTERS[selectedChar];
+  const pdpr = Math.min(window.devicePixelRatio || 1, 2);
+  menuPreviewCanvas.width = 84 * pdpr;
+  menuPreviewCanvas.height = 100 * pdpr;
+  menuPreviewCanvas.style.width = '84px';
+  menuPreviewCanvas.style.height = '100px';
+  const mctx = menuPreviewCanvas.getContext('2d');
+  mctx.setTransform(pdpr, 0, 0, pdpr, 0, 0);
+  drawSprite(mctx, 42, 98, s, 1, 0, false);
+}
+
+// ==================== ЛОГИКА ====================
+function startGame() {
+  try {
+    input.left = input.right = input.jump = false;
+    joyEnd();
+    releaseJump();
+    player.stats = CHARACTERS[selectedChar] || CHARACTERS.goghenchik;
+    score.p = 0; score.a = 0;
+    touches.p = 0; touches.a = 0;
+    messageTimer = 0;
+    resetPositions();
+    menuEl.classList.add('hidden');
+    charEl.classList.add('hidden');
+    goEl.classList.add('hidden');
+    joyEl.classList.remove('hidden');
+    jumpBtn.classList.remove('hidden');
+    state = 'playing';
+  } catch (err) { console.error('startGame error:', err); }
+}
+
+function resetPositions() {
+  player.x = W * 0.18; player.y = GROUND_Y;
+  player.vx = 0; player.vy = 0;
+  player.onGround = true; player.hitCooldown = 0; player.walkPhase = 0;
+  ai.x = W * 0.82; ai.y = GROUND_Y;
+  ai.vx = 0; ai.vy = 0;
+  ai.onGround = true; ai.hitCooldown = 0; ai.walkPhase = 0;
+  resetBall(Math.random() > 0.5 ? 1 : -1);
+}
+
+function resetBall(dir) {
+  ball.x = NET_X + dir * 30;
+  ball.y = GROUND_Y - 260;
+  ball.vx = 0; ball.vy = 0;
+  ball.trail.length = 0;
+  ball.spin = 0;
+  ball.serveDir = dir;
+  serveDelay = SERVE_DELAY;
+  touches.p = 0;
+  touches.a = 0;
+  lastBallSide = Math.sign(ball.x - NET_X);
+}
+
+function showMessage(text, color) {
+  messageText = text;
+  messageTimer = 70;
+  messageColor = color || '#fff';
+}
+
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = Math.random() * 5 + 1.5;
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1,
+      life: 1, color, size: Math.random() * 2.5 + 1.2
+    });
+  }
+}
+function spawnRing(x, y, color, maxR) {
+  rings.push({ x, y, r: 0, maxR: maxR || 40, life: 1, color });
+}
+
+function updatePlayer(dt) {
+  const speed = player.stats.speed;
+  if (input.left) player.vx = -speed;
+  else if (input.right) player.vx = speed;
+  else player.vx *= Math.pow(0.72, dt);
+
+  player.x += player.vx * dt;
+  player.x = Math.max(player.w/2 + 4, Math.min(NET_X - player.w/2 - 4, player.x));
+
+  // Прыжок: сбрасываем input.jump после использования — не будет авто-прыжков при удержании
+  if (input.jump && player.onGround) {
+    player.vy = player.stats.jump;
+    player.onGround = false;
+    input.jump = false;   // сброс, чтобы не срабатывал снова
+  }
+  player.vy += GRAVITY * dt;
+  player.y += player.vy * dt;
+  if (player.y >= GROUND_Y) { player.y = GROUND_Y; player.vy = 0; player.onGround = true; }
+  player.jumping = !player.onGround;
+
+  if (player.onGround && Math.abs(player.vx) > 0.5) player.walkPhase += Math.abs(player.vx) * 0.14 * dt;
+  else player.walkPhase *= Math.pow(0.8, dt);
+
+  if (player.hitCooldown > 0) player.hitCooldown -= dt;
+}
+
+function updateAI(dt) {
+  const homeX = W * 0.82;
+  let targetX;
+  if (ball.x > NET_X - 30 && serveDelay <= 0) targetX = Math.max(NET_X + 30, Math.min(W - 30, ball.x));
+  else targetX = homeX;
+
+  const dx = targetX - ai.x;
+  const speed = ai.stats.speed * 0.84;
+  if (Math.abs(dx) > 4) ai.vx = Math.sign(dx) * speed;
+  else ai.vx *= Math.pow(0.72, dt);
+  ai.x += ai.vx * dt;
+  ai.x = Math.max(NET_X + ai.w/2 + 4, Math.min(W - ai.w/2 - 4, ai.x));
+
+  if (ai.onGround && serveDelay <= 0 && ball.x > NET_X + 20 &&
+      Math.abs(ball.x - ai.x) < 100 && ball.y < GROUND_Y - 130) {
+    if (Math.random() < 0.07) { ai.vy = ai.stats.jump; ai.onGround = false; }
+  }
+  ai.vy += GRAVITY * dt;
+  ai.y += ai.vy * dt;
+  if (ai.y >= GROUND_Y) { ai.y = GROUND_Y; ai.vy = 0; ai.onGround = true; }
+  ai.jumping = !ai.onGround;
+
+  if (ai.onGround && Math.abs(ai.vx) > 0.5) ai.walkPhase += Math.abs(ai.vx) * 0.14 * dt;
+  if (ai.hitCooldown > 0) ai.hitCooldown -= dt;
+}
+
+function updateBall(dt) {
+  if (serveDelay > 0) {
+    serveDelay -= dt;
+    ball.y = (GROUND_Y - 260) + Math.sin(screenTime * 6) * 4;
+    if (serveDelay <= 0) {
+      ball.vx = TOSS_VX * ball.serveDir;
+      ball.vy = TOSS_VY;
+    }
+    return;
+  }
+
+  const steps = Math.max(1, Math.min(8, Math.ceil(dt * 2)));
+  const subDt = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    if (ballStep(subDt)) return;
+  }
+}
+
+function ballStep(dt) {
+  ball.trail.push({ x: ball.x, y: ball.y });
+  if (ball.trail.length > 10) ball.trail.shift();
+
+  ball.vy += GRAVITY * dt;
+
+  const sp = Math.hypot(ball.vx, ball.vy);
+  if (sp > MAX_SPEED) {
+    ball.vx = ball.vx / sp * MAX_SPEED;
+    ball.vy = ball.vy / sp * MAX_SPEED;
+  }
+
+  const prevSide = Math.sign(ball.x - NET_X);
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+  ball.spin += ball.vx * 0.025 * dt;
+
+  // === Пересечение сетки: сбрасываем счётчики касаний ===
+  const curSide = Math.sign(ball.x - NET_X);
+  if (curSide !== 0 && prevSide !== 0 && curSide !== prevSide) {
+    touches.p = 0;
+    touches.a = 0;
+  }
+  lastBallSide = curSide;
+
+  if (ball.x - ball.r < 0) {
+    ball.x = ball.r; ball.vx = Math.abs(ball.vx) * 0.8;
+    spawnParticles(0, ball.y, '#ffd080', 4);
+  }
+  if (ball.x + ball.r > W) {
+    ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.8;
+    spawnParticles(W, ball.y, '#ffd080', 4);
+  }
+  if (ball.y - ball.r < 0) {
+    ball.y = ball.r; ball.vy = Math.abs(ball.vy) * 0.8;
+  }
+
+  if (ball.y + ball.r > NET_TOP) {
+    const nl = NET_X - NET_HALF, nr = NET_X + NET_HALF;
+    if (ball.x + ball.r > nl && ball.x - ball.r < nr) {
+      if (ball.x < NET_X) { ball.x = nl - ball.r; ball.vx = -Math.abs(ball.vx) * 0.65; }
+      else { ball.x = nr + ball.r; ball.vx = Math.abs(ball.vx) * 0.65; }
+    }
+  }
+
+  // Проверки ударов — могут вернуть true, если розыгрыш завершён
+  if (checkHit(player, 'p')) return true;
+  if (checkHit(ai, 'a')) return true;
+
+  if (ball.y + ball.r >= GROUND_Y) {
+    ball.y = GROUND_Y - ball.r;
+    const onPlayerSide = ball.x < NET_X;
+    if (onPlayerSide) {
+      score.a++;
+      spawnParticles(ball.x, GROUND_Y, '#ff5a8c', 16);
+      spawnRing(ball.x, GROUND_Y, '#ff5a8c', 60);
+    } else {
+      score.p++;
+      spawnParticles(ball.x, GROUND_Y, '#4afcb0', 16);
+      spawnRing(ball.x, GROUND_Y, '#4afcb0', 60);
+    }
+    if (score.p >= WIN_SCORE || score.a >= WIN_SCORE) endGame();
+    else resetBall(onPlayerSide ? -1 : 1);
+    return true;
+  }
+  return false;
+}
+
+// Возвращает true если розыгрыш завершён (4 касания = фол)
+function checkHit(p, side) {
+  if (p.hitCooldown > 0) return false;
+
+  const rx = p.x - p.w / 2, ry = p.y - p.h;
+  const cx = Math.max(rx, Math.min(ball.x, rx + p.w));
+  const cy = Math.max(ry, Math.min(ball.y, ry + p.h));
+  const dx = ball.x - cx, dy = ball.y - cy;
+  const d2 = dx * dx + dy * dy;
+  const hitR = ball.r + 4;
+  if (d2 > hitR * hitR) return false;
+
+  // Отдельно определяем удар верхней частью головы: обычное отражение
+  // от прямоугольника персонажа часто даёт слишком слабый вертикальный импульс.
+  const headHit = ball.y <= ry + ball.r * 0.42 &&
+    ball.x >= rx + p.w * 0.12 - ball.r * 0.45 &&
+    ball.x <= rx + p.w * 0.88 + ball.r * 0.45;
+
+  // === БЛОК: не считается за касание ===
+  // Мяч выше верха сетки И игрок в прыжке → блок
+  const isBlock = p.jumping && ball.y < NET_TOP + 5;
+
+  // Считаем касание (если не блок)
+  if (!isBlock) {
+    if (side === 'p') {
+      touches.p++;
+      if (touches.p > MAX_TOUCHES) return handleFoul('p');
+    } else {
+      touches.a++;
+      if (touches.a > MAX_TOUCHES) return handleFoul('a');
+    }
+  } else {
+    showMessage('БЛОК!', side === 'p' ? '#ffb347' : '#a060ff');
+  }
+
+  const d = Math.sqrt(d2) || 0.001;
+  let nx = dx / d, ny = dy / d;
+  if (d < 0.01) { nx = side === 'p' ? 1 : -1; ny = -0.3; }
+
+  ball.x = cx + nx * hitR;
+  ball.y = cy + ny * hitR;
+
+  const dot = ball.vx * nx + ball.vy * ny;
+  ball.vx -= 2 * dot * nx;
+  ball.vy -= 2 * dot * ny;
+
+  const power = p.stats.hitPower;
+  ball.vx *= power;
+  ball.vy *= power;
+
+  if (side === 'p') {
+    if (ball.vy > MIN_HIT_UP) ball.vy = MIN_HIT_UP - Math.abs(ball.vy) * 0.3;
+    if (ball.vx < 3) ball.vx = 3 + Math.abs(ball.vx) * 0.25;
+  } else {
+    if (ball.vy > MIN_HIT_UP) ball.vy = MIN_HIT_UP - Math.abs(ball.vy) * 0.3;
+    if (ball.vx > -3) ball.vx = -3 - Math.abs(ball.vx) * 0.25;
+  }
+
+  // Сильный направленный отскок от головы в сторону сетки.
+  // Импульса хватает, чтобы мяч поднялся выше сетки, а не падал обратно рядом.
+  if (headHit) {
+    const towardNet = side === 'p' ? 1 : -1;
+    ball.vx = towardNet * Math.max(8.1, Math.abs(ball.vx) * 0.78);
+    ball.vy = -9.8;
+  }
+
+  let sp = Math.hypot(ball.vx, ball.vy);
+  if (sp > MAX_SPEED) {
+    ball.vx = ball.vx / sp * MAX_SPEED;
+    ball.vy = ball.vy / sp * MAX_SPEED;
+    sp = MAX_SPEED;
+  }
+  if (sp < 5) {
+    const k = 5 / (sp || 1);
+    ball.vx *= k;
+    ball.vy *= k;
+  }
+
+  p.hitCooldown = 6;
+  spawnParticles(ball.x, ball.y, p.stats.glow, isBlock ? 16 : 10);
+  spawnRing(ball.x, ball.y, p.stats.glow, isBlock ? 60 : 40);
+  return false;
+}
+
+// Фол: 4-е касание
+function handleFoul(side) {
+  if (side === 'p') {
+    score.a++;
+    spawnParticles(ball.x, ball.y, '#ff5a8c', 30);
+    spawnRing(ball.x, ball.y, '#ff5a8c', 90);
+    showMessage('4 КАСАНИЯ!', '#ff5a8c');
+  } else {
+    score.p++;
+    spawnParticles(ball.x, ball.y, '#4afcb0', 30);
+    spawnRing(ball.x, ball.y, '#4afcb0', 90);
+    showMessage('4 КАСАНИЯ У ХЕЙТЕРА!', '#4afcb0');
+  }
+  if (score.p >= WIN_SCORE || score.a >= WIN_SCORE) { endGame(); return true; }
+  resetBall(side === 'p' ? 1 : -1);
+  return true;
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= Math.pow(0.93, dt); p.vy *= Math.pow(0.93, dt);
+    p.vy += 0.28 * dt;
+    p.life -= 0.03 * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    r.r += (r.maxR - r.r) * 0.18 * dt;
+    r.life -= 0.06 * dt;
+    if (r.life <= 0) rings.splice(i, 1);
+  }
+  if (messageTimer > 0) messageTimer -= dt;
+}
+
+function endGame() {
+  state = 'gameover';
+  input.left = input.right = input.jump = false;
+  joyEnd();
+  releaseJump();
+  joyEl.classList.add('hidden');
+  jumpBtn.classList.add('hidden');
+  const won = score.p >= WIN_SCORE;
+  const titleEl = document.getElementById('go-title');
+  titleEl.className = 'result-title ' + (won ? 'win' : 'lose');
+  titleEl.textContent = won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ';
+  document.getElementById('go-score').textContent = `${score.p} : ${score.a}`;
+
+  const s = player.stats;
+  document.getElementById('go-char-name').textContent = s.name;
+  document.getElementById('go-char-role').textContent = s.role;
+  const gcc = document.getElementById('go-char-canvas');
+  const gdpr = Math.min(window.devicePixelRatio || 1, 2);
+  gcc.width = 50 * gdpr; gcc.height = 60 * gdpr;
+  gcc.style.width = '50px'; gcc.style.height = '60px';
+  const gctx = gcc.getContext('2d');
+  gctx.setTransform(gdpr, 0, 0, gdpr, 0, 0);
+  gctx.save(); gctx.scale(0.62, 0.62);
+  drawSprite(gctx, 40, 96, s, 1, 0, false);
+  gctx.restore();
+
+  setTimeout(() => goEl.classList.remove('hidden'), 400);
+}
+
+// ==================== ОТРИСОВКА ====================
+function drawSky() {
+  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  sky.addColorStop(0.00, '#160c38');
+  sky.addColorStop(0.35, '#3a1e5e');
+  sky.addColorStop(0.62, '#7a2f74');
+  sky.addColorStop(0.82, '#d05a72');
+  sky.addColorStop(0.94, '#ff9a5a');
+  sky.addColorStop(1.00, '#ffd07a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, GROUND_Y);
+
+  for (const s of skyDecor) {
+    const tw = 0.5 + 0.5 * Math.sin(screenTime * s.speed + s.tw);
+    ctx.globalAlpha = 0.25 + tw * 0.5;
+    ctx.fillStyle = '#fff8e0';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const sx = W * 0.72, sy = GROUND_Y - 40;
+  const sunR = Math.max(28, W * 0.045);
+  const sg = ctx.createRadialGradient(sx, sy, 2, sx, sy, sunR * 3.5);
+  sg.addColorStop(0, 'rgba(255, 240, 190, 1)');
+  sg.addColorStop(0.25, 'rgba(255, 200, 120, 0.45)');
+  sg.addColorStop(1, 'rgba(255, 120, 90, 0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(sx, sy, sunR * 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff4d4';
+  ctx.beginPath(); ctx.arc(sx, sy, sunR, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawSand() {
+  const sand = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+  sand.addColorStop(0, '#e8c880');
+  sand.addColorStop(1, '#8a5c30');
+  ctx.fillStyle = sand;
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+  ctx.fillStyle = '#ffedb0';
+  ctx.fillRect(0, GROUND_Y, W, 2);
+
+  const lineY = GROUND_Y + Math.min(22, (H - GROUND_Y) * 0.35);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, lineY); ctx.lineTo(W, lineY); ctx.stroke();
+}
+
+function drawNet() {
+  const netW = 14;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+  ctx.fillRect(NET_X - netW / 2, NET_TOP, netW, GROUND_Y - NET_TOP);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+  ctx.lineWidth = 1;
+  for (let x = NET_X - netW / 2; x <= NET_X + netW / 2; x += 4) {
+    ctx.beginPath(); ctx.moveTo(x, NET_TOP); ctx.lineTo(x, GROUND_Y); ctx.stroke();
+  }
+  for (let y = NET_TOP; y <= GROUND_Y; y += 8) {
+    ctx.beginPath(); ctx.moveTo(NET_X - netW / 2, y); ctx.lineTo(NET_X + netW / 2, y); ctx.stroke();
+  }
+  ctx.fillStyle = '#f8f4ff';
+  ctx.fillRect(NET_X - netW / 2 - 1, NET_TOP - 3, netW + 2, 5);
+}
+
+function drawTrajectory() {
+  if (state !== 'playing') return;
+  if (serveDelay > 0) return;
+  if (ball.vy <= 0.3) return;
+
+  const targetY = GROUND_Y - ball.r;
+  const a = 0.5 * GRAVITY;
+  const b = ball.vy;
+  const c = ball.y - targetY;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return;
+  const t = (-b + Math.sqrt(disc)) / (2 * a);
+  if (!isFinite(t) || t <= 0 || t > 300) return;
+
+  let landX = ball.x + ball.vx * t;
+  if (landX < 0) landX = -landX;
+  if (landX > W) landX = 2 * W - landX;
+  landX = Math.max(10, Math.min(W - 10, landX));
+
+  const onPlayerSide = landX < NET_X;
+  const col = onPlayerSide
+    ? { line: 'rgba(255, 100, 140, 0.55)', fill: 'rgba(255, 100, 140, 0.9)' }
+    : { line: 'rgba(120, 250, 190, 0.55)', fill: 'rgba(120, 250, 190, 0.9)' };
+
+  ctx.save();
+  ctx.setLineDash([5, 7]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = col.line;
+  ctx.beginPath();
+  ctx.moveTo(ball.x, ball.y + ball.r);
+  ctx.lineTo(landX, GROUND_Y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const pulse = 0.6 + 0.4 * Math.sin(screenTime * 8);
+  const grd = ctx.createRadialGradient(landX, GROUND_Y, 2, landX, GROUND_Y, 26 * pulse);
+  grd.addColorStop(0, col.fill);
+  grd.addColorStop(0.6, col.line);
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.ellipse(landX, GROUND_Y + 1, 26 * pulse, 8 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = col.fill;
+  ctx.beginPath(); ctx.arc(landX, GROUND_Y - 1, 3.5, 0, Math.PI * 2); ctx.fill();
+
+  ctx.strokeStyle = col.fill;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(landX, GROUND_Y + 1, 16, 5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBall() {
+  for (let i = 0; i < ball.trail.length; i++) {
+    const t = ball.trail[i];
+    const a = (i / ball.trail.length) * 0.3;
+    const size = ball.r * (0.35 + 0.6 * (i / ball.trail.length));
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255, 220, 140, ${a})`;
+    ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const glow = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.r * 2.4);
+  glow.addColorStop(0, 'rgba(255, 230, 160, 0.55)');
+  glow.addColorStop(0.5, 'rgba(255, 160, 100, 0.18)');
+  glow.addColorStop(1, 'rgba(255, 160, 100, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r * 2.4, 0, Math.PI * 2); ctx.fill();
+
+  ctx.save();
+  ctx.translate(ball.x, ball.y);
+  ctx.rotate(ball.spin);
+  ctx.fillStyle = '#f8f2dc';
+  ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a5fc8'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.arc(0, 0, ball.r * 0.6, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, ball.r * 0.6, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke();
+  ctx.strokeStyle = '#e04a4a';
+  ctx.beginPath(); ctx.moveTo(0, -ball.r); ctx.quadraticCurveTo(ball.r * 1.35, 0, 0, ball.r); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -ball.r); ctx.quadraticCurveTo(-ball.r * 1.35, 0, 0, ball.r); ctx.stroke();
+  ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.ellipse(-ball.r * 0.4, -ball.r * 0.45, ball.r * 0.25, ball.r * 0.15, -0.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  for (const r of rings) {
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.life * 0.7;
+    ctx.lineWidth = 3 * r.life + 1;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Индикатор касаний — 3 кружка под именем
+function drawTouchDots(cx, cy, count, color) {
+  const r = 6;
+  const gap = 16;
+  const startX = cx - gap;
+  for (let i = 0; i < MAX_TOUCHES; i++) {
+    const x = startX + i * gap;
+    ctx.beginPath();
+    ctx.arc(x, cy, r, 0, Math.PI * 2);
+    if (i < count) {
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+}
+
+function drawScore() {
+  const fontSize = Math.max(38, Math.min(W, H * 1.2) * 0.09);
+  const labelSize = Math.max(10, fontSize * 0.22);
+  ctx.save();
+  ctx.font = `900 ${fontSize}px -apple-system, system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+
+  const topY = Math.max(14, H * 0.03);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillText(score.p, W * 0.25 + 2, topY + 2);
+  ctx.fillText(score.a, W * 0.75 + 2, topY + 2);
+  ctx.fillText(':', W * 0.5 + 2, topY + fontSize * 0.28);
+
+  ctx.fillStyle = '#fff8e0';
+  ctx.fillText(score.p, W * 0.25, topY);
+  ctx.fillStyle = '#ffd0a0';
+  ctx.fillText(score.a, W * 0.75, topY);
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = `900 ${fontSize * 0.6}px -apple-system, system-ui, sans-serif`;
+  ctx.fillText(':', W * 0.5, topY + fontSize * 0.28);
+
+  // Имена
+  ctx.font = `800 ${labelSize}px -apple-system, system-ui, sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText(player.stats.name.toUpperCase(), W * 0.25, topY + fontSize + 6);
+  ctx.fillStyle = 'rgba(200, 160, 255, 0.9)';
+  ctx.fillText('ХЕЙТЕР', W * 0.75, topY + fontSize + 6);
+
+  // Индикаторы касаний
+  const dotsY = topY + fontSize + 6 + labelSize + 12;
+  drawTouchDots(W * 0.25, dotsY, touches.p, player.stats.glow);
+  drawTouchDots(W * 0.75, dotsY, touches.a, AI_CHAR.glow);
+
+  // Отсчёт
+  if (serveDelay > 0) {
+    const n = Math.max(1, Math.ceil(serveDelay / (SERVE_DELAY / 3)));
+    const cntSize = Math.max(50, Math.min(W, H) * 0.16);
+    ctx.font = `900 ${cntSize}px -apple-system, system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 240, 200, 0.85)';
+    ctx.fillText(n > 3 ? '3' : n, W * 0.5, H * 0.4);
+    ctx.font = `700 ${cntSize * 0.2}px -apple-system, system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 220, 180, 0.7)';
+    ctx.fillText('ПРИГОТОВЬСЯ', W * 0.5, H * 0.4 + cntSize + 8);
+  }
+  ctx.restore();
+}
+
+// Всплывающее сообщение
+function drawMessage() {
+  if (messageTimer <= 0 || !messageText) return;
+  const alpha = Math.min(1, messageTimer / 25);
+  const size = Math.max(28, Math.min(W, H) * 0.08);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = `900 ${size}px -apple-system, system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillText(messageText, W * 0.5 + 3, H * 0.22 + 3);
+  ctx.fillStyle = messageColor;
+  ctx.fillText(messageText, W * 0.5, H * 0.22);
+  ctx.restore();
+}
+
+function draw() {
+  drawSky();
+  drawSand();
+
+  ctx.fillStyle = 'rgba(80, 40, 20, 0.25)';
+  ctx.beginPath(); ctx.ellipse(player.x, GROUND_Y + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ai.x, GROUND_Y + 4, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  drawTrajectory();
+  drawNet();
+  drawSprite(ctx, player.x, player.y, player.stats, 1, player.walkPhase, player.jumping);
+  drawSprite(ctx, ai.x, ai.y, ai.stats, -1, ai.walkPhase, ai.jumping);
+  drawBall();
+  drawParticles();
+  drawScore();
+  drawMessage();
+}
+
+// ==================== ЦИКЛ ====================
+let lastTime = 0;
+let loopRunning = false;
+
+function loop(now) {
+  if (!loopRunning) return;
+  try {
+    if (!lastTime) lastTime = now;
+    let dt = (now - lastTime) / 16.667;
+    lastTime = now;
+    if (!isFinite(dt) || dt < 0) dt = 1;
+    if (dt > 2.5) dt = 2.5;
+
+    screenTime += dt / 60;
+    if (!isFinite(screenTime)) screenTime = 0;
+
+    if (state === 'playing') {
+      updatePlayer(dt);
+      updateAI(dt);
+      updateBall(dt);
+    }
+    updateParticles(dt);
+    draw();
+  } catch (err) { console.error('loop error:', err); }
+  requestAnimationFrame(loop);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) lastTime = 0;
+});
+
+let resizeTimeout = 0;
+function onResize() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(resizeCanvas, 80);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 250));
+
+// ==================== СТАРТ ====================
+resizeCanvas();
+renderCharCards();
+updateMenuCharPreview();
+resetPositions();
+state = 'menu';
+
+loopRunning = true;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
